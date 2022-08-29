@@ -13,8 +13,6 @@ struct opengl_state : qsf::base_state {
 		auto x = 1.0f; 
 
 		this->cube = qgl::get_cube();
-
-
 		this->cube.generate();
 
 		this->cube2 = this->cube;
@@ -108,10 +106,10 @@ struct opengl_state : qsf::base_state {
 
 	}
 
-	qgl::vertex_array_type<qgl::pos3, qgl::rgb, qgl::tex> cube;
-	qgl::vertex_array_type<qgl::pos3, qgl::rgb, qgl::tex> cube2;
-	qgl::vertex_array_type<qgl::pos3, qgl::rgb> cube3;
-	qgl::vertex_array_type<qgl::pos3, qgl::rgb> cube4;
+	qgl::vertex_index_array_type<qgl::pos3, qgl::rgb, qgl::tex> cube;
+	qgl::vertex_index_array_type<qgl::pos3, qgl::rgb, qgl::tex> cube2;
+	qgl::vertex_index_array_type<qgl::pos3, qgl::rgb> cube3;
+	qgl::vertex_index_array_type<qgl::pos3, qgl::rgb> cube4;
 	std::vector<std::vector<qpl::cubic_generator_vector3f>> color_gens;
 	qpl::fps_counter fps;
 	qpl::camera camera;
@@ -129,6 +127,7 @@ struct shapes_state : qsf::base_state {
 		for (qpl::size i = 0u; i < this->shapes.size(); ++i) {
 			this->shapes[i].vertex_array.set_texture(this->get_texture("texture"));
 			this->shapes[i].set_position(qpl::vec(i / 10, i % 10, 0) * 1.1);
+			this->shapes[i].set_dimension({ 1, 1, 2 });
 			this->shapes[i].set_color(qpl::get_random_color());
 		}
 
@@ -168,6 +167,11 @@ struct shapes_state : qsf::base_state {
 	void updating() override {
 		this->update_cursor();
 		this->update(this->camera);
+
+		this->fps.measure();
+		if (this->event().key_holding(sf::Keyboard::F)) {
+			qpl::println("FPS = ", this->fps.get_fps_u32(), " ", this->frame_ctr);
+		}
 	}
 
 	void drawing() override {
@@ -176,6 +180,104 @@ struct shapes_state : qsf::base_state {
 	}
 
 	std::vector<qgl::cuboid> shapes;
+	qpl::fps_counter fps;
+	qpl::camera camera;
+	bool lock_cursor = true;
+};
+
+struct sphere_state : qsf::base_state {
+
+
+
+	void init() override {
+		this->clear_color = qpl::rgb(30, 30, 40);
+
+		this->set_active(true);
+
+		qpl::perlin_noise y_noise;
+		y_noise.set_seed_random();
+
+		qpl::perlin_noise c_noise;
+		c_noise.set_seed_random();
+
+		auto n = 100;
+		auto d = 10;
+		for (qpl::i32 z = -n; z < n; ++z) {
+			for (qpl::i32 x = -n; x < n; ++x) {
+
+				auto pos = qpl::vec(x, 0, z);
+				constexpr auto add = [&](qpl::vec2 quad) {
+
+					auto y = y_noise.get(x + quad.x, z + quad.y, 0.01, 15) * d * 5;
+					auto c = std::fmod((c_noise.get(x + quad.x, z + quad.y, 0.1, 2) - 0.5) * 3, 1.0);
+
+					qpl::vec3 position = pos + qpl::vec(quad.x, y, quad.y);
+					qpl::rgb color = qpl::get_rainbow_color(c).darkened(0.5);
+					return qgl::make_vertex(position / d, color);
+				};
+
+				this->va.add(add({ 0, 0 }));
+				this->va.add(add({ 1, 0 }));
+				this->va.add(add({ 1, 1 }));
+				this->va.add(add({ 0, 1 }));
+			}
+		}
+
+
+		this->va.generate();
+
+		this->va.primitive_type = qgl::primitive_type::quads;
+
+		this->set_active(false);
+	}
+
+	void cursor_on() {
+		this->show_cursor();
+		this->camera.allow_looking = false;
+		this->lock_cursor = false;
+	}
+	void cursor_off() {
+		this->hide_cursor();
+		this->camera.allow_looking = true;
+		this->lock_cursor = true;
+
+		this->set_cursor_position(this->center());
+	}
+
+	void update_cursor() {
+		if (this->has_gained_focus()) {
+			this->cursor_off();
+		}
+		if (this->has_lost_focus()) {
+			this->cursor_on();
+		}
+
+		if (this->lock_cursor) {
+			if (this->frame_ctr == 0u) {
+				this->cursor_off();
+			}
+			this->set_cursor_position(this->center());
+		}
+	}
+
+	void updating() override {
+		this->update_cursor();
+		this->update(this->camera);
+
+		this->fps.measure();
+		if (this->event().key_holding(sf::Keyboard::F)) {
+			qpl::println("FPS = ", this->fps.get_fps_u32(), " ", this->frame_ctr);
+		}
+	}
+
+	void drawing() override {
+
+		this->draw(this->va, this->camera);
+	}
+
+	qgl::vertex_array_type<qgl::pos3, qgl::rgb> va;
+
+	qpl::fps_counter fps;
 	qpl::camera camera;
 	bool lock_cursor = true;
 };
@@ -185,9 +287,10 @@ int main() try {
 	framework.enable_gl();
 	framework.set_dimension({ 1440, 900 });
 	framework.add_texture("texture", "resources/texture.png");
-	framework.add_state<shapes_state>();
+	//framework.add_state<shapes_state>();
 	//framework.add_state<opengl_state>();
-	framework.set_framerate_limit(160);
+	framework.add_state<sphere_state>();
+	//framework.set_framerate_limit(160);
 	framework.game_loop();
 }
 catch (std::exception& any) {
