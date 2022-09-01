@@ -185,10 +185,7 @@ struct shapes_state : qsf::base_state {
 	bool lock_cursor = true;
 };
 
-struct sphere_state : qsf::base_state {
-
-
-
+struct perlin_state : qsf::base_state {
 	void init() override {
 		this->clear_color = qpl::rgb(30, 30, 40);
 
@@ -212,7 +209,7 @@ struct sphere_state : qsf::base_state {
 					auto c = std::fmod((c_noise.get(x + quad.x, z + quad.y, 0.1, 2) - 0.5) * 3, 1.0);
 
 					qpl::vec3 position = pos + qpl::vec(quad.x, y, quad.y);
-					qpl::rgb color = qpl::get_rainbow_color(c).darkened(0.5);
+					qpl::rgb color = qpl::get_rainbow_color(c);
 					return qgl::make_vertex(position / d, color);
 				};
 
@@ -282,14 +279,86 @@ struct sphere_state : qsf::base_state {
 	bool lock_cursor = true;
 };
 
+struct sphere_state : qsf::base_state {
+
+	void init() override {
+		this->clear_color = qpl::rgb(30, 30, 40);
+
+		this->set_active(true);
+
+		this->cube = qgl::get_cube();
+		this->cube.generate();
+
+		this->set_active(false);
+
+		this->color_gens.resize(this->cube.size());
+
+		this->hide_cursor();
+
+		qgl::vertex_array_flag_type<0, qgl::pos3, qgl::rgb> va;
+
+	}
+
+	void cursor_on() {
+		this->show_cursor();
+		this->camera.allow_looking = false;
+		this->lock_cursor = false;
+	}
+	void cursor_off() {
+		this->hide_cursor();
+		this->camera.allow_looking = true;
+		this->lock_cursor = true;
+
+		this->set_cursor_position(this->center());
+	}
+
+	void update_cursor() {
+		if (this->has_gained_focus()) {
+			this->cursor_off();
+		}
+		if (this->has_lost_focus()) {
+			this->cursor_on();
+		}
+
+		if (this->lock_cursor) {
+			if (this->frame_ctr == 0u) {
+				this->cursor_off();
+			}
+			this->set_cursor_position(this->center());
+		}
+	}
+
+	void updating() override {
+		this->update_cursor();
+		this->update(this->camera);
+
+		for (auto& i : this->color_gens) {
+			i.update(this->frame_time_f());
+		}
+		for (qpl::size i = 0u; i < this->cube.size(); ++i) {
+			this->cube[i].color = this->color_gens[i].get() * 2;
+		}
+		this->cube.update();
+	}
+
+	void drawing() override {
+		this->draw(this->cube, this->camera);
+	}
+
+	qgl::vertex_index_array_type<qgl::pos3, qgl::rgb> cube;
+	std::vector<qpl::cubic_generator_vector3f> color_gens;
+	qpl::camera camera;
+	bool lock_cursor = true;
+};
+
 int main() try {
 	qsf::framework framework;
 	framework.enable_gl();
 	framework.set_dimension({ 1440, 900 });
 	framework.add_texture("texture", "resources/texture.png");
-	//framework.add_state<shapes_state>();
-	//framework.add_state<opengl_state>();
 	framework.add_state<sphere_state>();
+	//framework.add_state<shapes_state>();
+	//framework.add_state<sphere_state>();
 	//framework.set_framerate_limit(160);
 	framework.game_loop();
 }
