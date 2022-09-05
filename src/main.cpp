@@ -5,17 +5,24 @@ struct opengl_state : qsf::base_state {
 
 	void add_cube() {
 
-		auto index = this->cubes.size() / qgl::get_cube().vertices.size();
+		auto cube = qgl::get_cube();
 
-		this->color_gens.resize(this->color_gens.size() + qgl::get_cube().vertices.size());
+		auto index = this->cubes.size() / cube.indices.size();
+
+		this->color_gens.resize(this->color_gens.size() + cube.indices.size());
+
 
 		auto x = index % 10u;
 		auto y = index / 10u;
 
-		qgl::vertex_array<qgl::flag_index | qgl::flag_shader, qgl::pos3, qgl::rgb> cube = qgl::get_cube();
-		cube.move(qpl::vec(x, y, 0) * 1.1);
+		decltype(this->cubes) add = cube;
+		add.move(qpl::vec(x, y, 0) * 1.1);
 
-		this->cubes.add(cube);
+		for (auto& i : add.vertices) {
+			qpl::println(i);
+		}
+
+		this->cubes.add(add);
 	}
 
 	void init() override {
@@ -23,7 +30,7 @@ struct opengl_state : qsf::base_state {
 
 		this->set_active(true);
 
-		auto cube_count = 12u;
+		auto cube_count = 1u;
 
 		for (qpl::u32 i = 0u; i < cube_count; ++i) {
 			this->add_cube();
@@ -31,11 +38,11 @@ struct opengl_state : qsf::base_state {
 
 		this->cubes.generate();
 
-		qpl::println(this->cubes.get_fragment_shader());
-		qpl::println(this->cubes.get_vertex_shader());
+		//qpl::println(this->cubes.get_fragment_shader());
+		//qpl::println(this->cubes.get_vertex_shader());
+
 
 		this->set_active(false);
-
 
 		this->hide_cursor();
 	}
@@ -91,9 +98,133 @@ struct opengl_state : qsf::base_state {
 		this->draw(this->cubes, this->camera);
 	}
 
-	qgl::vertex_array<qgl::flag_index | qgl::flag_shader, qgl::pos3, qgl::rgb> cubes;
+	qgl::vertex_array<qgl::flag_default, qgl::pos3, qgl::rgb> cubes;
 	std::vector<qpl::cubic_generator_vector3f> color_gens;
 	qpl::camera camera;
+	bool lock_cursor = true;
+};
+
+struct sphere_state : qsf::base_state {
+
+	void add_sphere(qpl::size divisions) {
+
+		auto ico_sphere = qgl::make_ico_sphere(divisions);
+
+		auto index = this->sphere.size() / ico_sphere.indices.size();
+
+		this->color_gens.resize(this->color_gens.size() + (ico_sphere.indices.size()) / 3);
+
+		auto x = index % 10u;
+		auto y = index / 10u;
+
+		decltype(this->sphere) add = ico_sphere;
+
+		add.move(qpl::vec(x, y, 0) * 1.1);
+
+		this->sphere.add(add);
+	}
+
+	void init() override {
+		this->clear_color = qpl::rgb(30, 30, 40);
+
+		this->set_active(true);
+
+		auto count = 1u;
+
+		for (qpl::u32 i = 0u; i < count; ++i) {
+			this->add_sphere(this->divisions);
+		}
+
+		this->sphere.generate();
+
+
+		this->set_active(false);
+
+		this->hide_cursor();
+	}
+
+	void cursor_on() {
+		this->show_cursor();
+		this->camera.allow_looking = false;
+		this->lock_cursor = false;
+	}
+	void cursor_off() {
+		this->hide_cursor();
+		this->camera.allow_looking = true;
+		this->lock_cursor = true;
+
+		this->set_cursor_position(this->center());
+	}
+
+	void update_cursor() {
+		if (this->has_gained_focus()) {
+			this->cursor_off();
+		}
+		if (this->has_lost_focus()) {
+			this->cursor_on();
+		}
+
+		if (this->lock_cursor) {
+			if (this->frame_ctr == 0u) {
+				this->cursor_off();
+			}
+			this->set_cursor_position(this->center());
+		}
+	}
+
+	void updating() override {
+		this->update_cursor();
+		this->update(this->camera);
+
+		if (this->event().key_single_pressed(sf::Keyboard::E)) {
+			++this->divisions;
+			this->sphere.clear();
+			this->add_sphere(this->divisions);
+			this->sphere.update();
+
+			qpl::println(this->sphere.vertices.size(), " - ", this->color_gens.size());
+		}
+		if (this->event().key_single_pressed(sf::Keyboard::Q)) {
+			if (this->divisions) {
+				--this->divisions;
+				this->sphere.clear();
+				this->add_sphere(this->divisions);
+				this->sphere.update();
+
+				qpl::println(this->sphere.vertices.size(), " - ", this->color_gens.size());
+			}
+		}
+		if (this->event().key_single_pressed(sf::Keyboard::R)) {
+			this->add_sphere(this->divisions);
+			this->sphere.update();
+
+			qpl::println(this->sphere.vertices.size(), " - ", this->color_gens.size());
+		}
+
+		for (auto& i : this->color_gens) {
+			i.update(this->event().frame_time_f());
+		}
+
+
+		for (qpl::size i = 0u; i < this->sphere.size(); i += 3u) {
+			
+
+			auto color = this->color_gens[i / 3].get() * 2;
+			this->sphere[i + 0].color = color / 3;
+			this->sphere[i + 1].color = color / 3;
+			this->sphere[i + 2].color = color / 3;
+		}
+		this->sphere.update();
+	}
+
+	void drawing() override {
+		this->draw(this->sphere, this->camera);
+	}
+
+	qgl::vertex_array<qgl::flag_default, qgl::pos3, qgl::rgb> sphere;
+	std::vector<qpl::cubic_generator_vector3f> color_gens;
+	qpl::camera camera;
+	qpl::size divisions = 0u;
 	bool lock_cursor = true;
 };
 
@@ -196,7 +327,8 @@ int main() try {
 	framework.set_title("QPL");
 	framework.set_dimension({ 1400u, 950u });
 
-	framework.add_state<opengl_state>();
+	framework.add_state<sphere_state>();
+	//framework.add_state<opengl_state>();
 	framework.game_loop();
 }
 catch (std::exception& any) {
