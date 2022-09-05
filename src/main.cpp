@@ -113,13 +113,12 @@ struct sphere_state : qsf::base_state {
 		auto index = this->sphere.size() / ico_sphere.indices.size();
 
 		this->color_gens.resize(this->color_gens.size() + (ico_sphere.indices.size()) / 3);
-
 		auto x = index % 10u;
 		auto y = index / 10u;
 
 		decltype(this->sphere) add = ico_sphere;
 
-		add.move(qpl::vec(x, y, 0) * 1.1);
+		add.move(qpl::vec(x, y, 0) * 2.2);
 
 		this->sphere.add(add);
 	}
@@ -135,6 +134,7 @@ struct sphere_state : qsf::base_state {
 			this->add_sphere(this->divisions);
 		}
 
+		++this->sphere_count;
 		this->sphere.generate();
 
 
@@ -179,26 +179,43 @@ struct sphere_state : qsf::base_state {
 		if (this->event().key_single_pressed(sf::Keyboard::E)) {
 			++this->divisions;
 			this->sphere.clear();
-			this->add_sphere(this->divisions);
+			for (qpl::size i = 0u; i < this->sphere_count; ++i) {
+				this->add_sphere(this->divisions);
+			}
 			this->sphere.update();
 
-			qpl::println(this->sphere.vertices.size(), " - ", this->color_gens.size());
+			qpl::println(this->sphere.vertices.size());
 		}
 		if (this->event().key_single_pressed(sf::Keyboard::Q)) {
 			if (this->divisions) {
 				--this->divisions;
 				this->sphere.clear();
-				this->add_sphere(this->divisions);
+				for (qpl::size i = 0u; i < this->sphere_count; ++i) {
+					this->add_sphere(this->divisions);
+				}
 				this->sphere.update();
 
-				qpl::println(this->sphere.vertices.size(), " - ", this->color_gens.size());
+				qpl::println(this->sphere.vertices.size());
 			}
 		}
 		if (this->event().key_single_pressed(sf::Keyboard::R)) {
+
+			++this->sphere_count;
 			this->add_sphere(this->divisions);
 			this->sphere.update();
 
-			qpl::println(this->sphere.vertices.size(), " - ", this->color_gens.size());
+			qpl::println(this->sphere.vertices.size());
+		}
+		if (this->event().key_single_pressed(sf::Keyboard::T)) {
+
+			--this->sphere_count;
+			this->sphere.clear();
+			for (qpl::size i = 0u; i < this->sphere_count; ++i) {
+				this->add_sphere(this->divisions);
+			}
+			this->sphere.update();
+
+			qpl::println(this->sphere.vertices.size());
 		}
 
 		for (auto& i : this->color_gens) {
@@ -206,16 +223,21 @@ struct sphere_state : qsf::base_state {
 		}
 
 
-		for (qpl::size i = 0u; i < this->sphere.size(); i += 3u) {
-			
 
-			auto color = this->color_gens[i / 3].get() * 2;
-			this->sphere[i + 0].color = color / 3;
-			this->sphere[i + 1].color = color / 3;
-			this->sphere[i + 2].color = color / 3;
+		this->fps.measure();
+		if (this->event().key_holding(sf::Keyboard::F)) {
+			qpl::println(this->fps.get_fps_u32(), " FPS");
 		}
+		for (qpl::size i = 0u; i < this->sphere.size(); i += 3u) {
+
+			auto color = qpl::frgb(this->color_gens[i / 3].get()).intensified(0.5);
+			this->sphere[i + 0].color = color;
+			this->sphere[i + 1].color = color;
+			this->sphere[i + 2].color = color;
+		}
+
 		this->sphere.update();
-	}
+}
 
 	void drawing() override {
 		this->draw(this->sphere, this->camera);
@@ -225,7 +247,10 @@ struct sphere_state : qsf::base_state {
 	std::vector<qpl::cubic_generator_vector3f> color_gens;
 	qpl::camera camera;
 	qpl::size divisions = 0u;
+	qpl::size sphere_count = 0u;
 	bool lock_cursor = true;
+
+	qpl::fps_counter fps;
 };
 
 struct perlin_state : qsf::base_state {
