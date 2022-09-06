@@ -131,12 +131,14 @@ struct sphere_state : qsf::base_state {
 		auto count = 1u;
 
 		for (qpl::u32 i = 0u; i < count; ++i) {
+			++this->sphere_count;
 			this->add_sphere(this->divisions);
 		}
 
-		++this->sphere_count;
-		this->sphere.generate();
+		for (auto& i : this->sphere.vertices) {
 
+		}
+		this->sphere.generate();
 
 		this->set_active(false);
 
@@ -222,14 +224,11 @@ struct sphere_state : qsf::base_state {
 			i.update(this->event().frame_time_f());
 		}
 
-
-
 		this->fps.measure();
 		if (this->event().key_holding(sf::Keyboard::F)) {
 			qpl::println(this->fps.get_fps_u32(), " FPS");
 		}
 		for (qpl::size i = 0u; i < this->sphere.size(); i += 3u) {
-
 			auto color = qpl::frgb(this->color_gens[i / 3].get()).intensified(0.5);
 			this->sphere[i + 0].color = color;
 			this->sphere[i + 1].color = color;
@@ -237,7 +236,7 @@ struct sphere_state : qsf::base_state {
 		}
 
 		this->sphere.update();
-}
+	}
 
 	void drawing() override {
 		this->draw(this->sphere, this->camera);
@@ -271,7 +270,7 @@ struct perlin_state : qsf::base_state {
 			for (qpl::i32 x = -n; x < n; ++x) {
 
 				auto pos = qpl::vec(x, 0, z);
-				constexpr auto add = [&](qpl::vec2 quad) {
+				auto add = [&](qpl::vec2 quad) {
 
 					auto y = y_noise.get(x + quad.x, z + quad.y, 0.01, 15) * d * 5;
 					auto c = std::fmod((c_noise.get(x + quad.x, z + quad.y, 0.1, 2) - 0.5) * 3, 1.0);
@@ -345,8 +344,19 @@ struct perlin_state : qsf::base_state {
 };
 
 
-
 int main() try {
+
+	//qpl::rgb_type<qpl::u8, 3> r = decltype(r)::red();
+	//qpl::println(r);
+	//r.brighten(0.7);
+	//qpl::println(r);
+
+	//constexpr auto n = qpl::rgb_type<qpl::u8, 4>();
+	//qpl::println(n);
+	
+	constexpr auto m = qpl::rgb_type<qpl::u8, 2>(1, 5, 1);
+	//constexpr qpl::vector2i m;
+
 	qsf::framework framework;
 	framework.enable_gl();
 	framework.set_title("QPL");
