@@ -98,7 +98,7 @@ struct opengl_state : qsf::base_state {
 		this->draw(this->cubes, this->camera);
 	}
 
-	qgl::vertex_array<qgl::flag_default, qgl::pos3, qgl::rgb> cubes;
+	qgl::vertex_array<qgl::flag_default, qgl::pos3, qgl::frgb> cubes;
 	std::vector<qpl::cubic_generator_vector3f> color_gens;
 	qpl::camera camera;
 	bool lock_cursor = true;
@@ -112,7 +112,7 @@ struct sphere_state : qsf::base_state {
 
 		auto index = this->sphere.size() / ico_sphere.indices.size();
 
-		this->color_gens.resize(this->color_gens.size() + (ico_sphere.indices.size()) / 3);
+		//this->color_gens.resize(this->color_gens.size() + (ico_sphere.indices.size()) / 3);
 		auto x = index % 10u;
 		auto y = index / 10u;
 
@@ -121,6 +121,79 @@ struct sphere_state : qsf::base_state {
 		add.move(qpl::vec(x, y, 0) * 2.2);
 
 		this->sphere.add(add);
+		for (auto& i : this->sphere) {
+			i.color = qpl::rgb::black();
+		}
+
+		this->sphere_mesh.vertices.clear();
+		for (qpl::size i = 0u; i < this->sphere.vertices.size() - 1; ++i) {
+
+			auto a = this->sphere[i].position;
+			auto b = this->sphere[i + 1].position;
+
+			auto diff = a - b;
+			auto length = diff.length();
+
+			auto normal = (a - b) / length;
+			auto normalx = qpl::vec(b.x - a.x, a.y - b.y, a.z - b.z) / length;
+			auto normaly = qpl::vec(a.x - b.x, b.y - a.y, a.z - b.z) / length;
+			auto normalz = qpl::vec(a.x - b.x, a.y - b.y, b.z - a.z) / length;
+
+			auto thickness = 1.0 / 5;
+			auto offx = -normalx * thickness / 2;
+			auto offy = -normaly * thickness / 2;
+			auto offz = -normalz * thickness / 2;
+
+			
+
+			auto add = [&](qpl::vec3 v1, qpl::vec3 v2, qpl::vec3 normal, qpl::vec3 off, qpl::frgb color) {
+				this->sphere_mesh.add(qgl::make_vertex(v1 + normal * thickness + off, color));
+				this->sphere_mesh.add(qgl::make_vertex(v1 - normal * thickness + off, color));
+				this->sphere_mesh.add(qgl::make_vertex(v2 - normal * thickness + off, color));
+				this->sphere_mesh.add(qgl::make_vertex(v2 + normal * thickness + off, color));
+
+				this->sphere_mesh.add(qgl::make_vertex(v2 + normal * thickness + off, color));
+				this->sphere_mesh.add(qgl::make_vertex(v2 - normal * thickness + off, color));
+				this->sphere_mesh.add(qgl::make_vertex(v1 - normal * thickness + off, color));
+				this->sphere_mesh.add(qgl::make_vertex(v1 + normal * thickness + off, color));
+			};
+
+
+			//add(b, a, normalx, offx, qpl::frgb::red());
+			//add(a, b, normalx, -offx, qpl::frgb::red());
+			add(b, a, normaly, offz, qpl::frgb::red());
+			add(a, b, normaly, -offz, qpl::frgb::white());
+			break;
+
+			//this->sphere_mesh.add(qgl::make_vertex(b + normalx * thickness + offx, qpl::frgb::red()));
+			//this->sphere_mesh.add(qgl::make_vertex(b - normalx * thickness + offx, qpl::frgb::red()));
+			//this->sphere_mesh.add(qgl::make_vertex(a - normalx * thickness + offx, qpl::frgb::red()));
+			//this->sphere_mesh.add(qgl::make_vertex(a + normalx * thickness + offx, qpl::frgb::red()));
+			//
+			//this->sphere_mesh.add(qgl::make_vertex(a + normalx * thickness - offx, qpl::frgb::red()));
+			//this->sphere_mesh.add(qgl::make_vertex(a - normalx * thickness - offx, qpl::frgb::red()));
+			//this->sphere_mesh.add(qgl::make_vertex(b - normalx * thickness - offx, qpl::frgb::red()));
+			//this->sphere_mesh.add(qgl::make_vertex(b + normalx * thickness - offx, qpl::frgb::red()));
+			//
+			//this->sphere_mesh.add(qgl::make_vertex(b + normaly * thickness + offy, qpl::frgb::white()));
+			//this->sphere_mesh.add(qgl::make_vertex(b - normaly * thickness + offy, qpl::frgb::white()));
+			//this->sphere_mesh.add(qgl::make_vertex(a - normaly * thickness + offy, qpl::frgb::white()));
+			//this->sphere_mesh.add(qgl::make_vertex(a + normaly * thickness + offy, qpl::frgb::white()));
+			//
+			//this->sphere_mesh.add(qgl::make_vertex(a + normaly * thickness - offy, qpl::frgb::white()));
+			//this->sphere_mesh.add(qgl::make_vertex(a - normaly * thickness - offy, qpl::frgb::white()));
+			//this->sphere_mesh.add(qgl::make_vertex(b - normaly * thickness - offy, qpl::frgb::white()));
+			//this->sphere_mesh.add(qgl::make_vertex(b + normaly * thickness - offy, qpl::frgb::white()));
+			//break;
+
+			//this->sphere_mesh.add(qgl::make_vertex(a + normaly * thickness, qpl::frgb::blue()));
+			//this->sphere_mesh.add(qgl::make_vertex(a - normaly * thickness, qpl::frgb::blue()));
+			//this->sphere_mesh.add(qgl::make_vertex(b - normaly * thickness, qpl::frgb::blue()));
+			//this->sphere_mesh.add(qgl::make_vertex(b + normaly * thickness, qpl::frgb::blue()));
+
+		}
+		this->sphere_mesh.update();
+
 	}
 
 	void init() override {
@@ -135,12 +208,8 @@ struct sphere_state : qsf::base_state {
 			this->add_sphere(this->divisions);
 		}
 
-		for (auto& i : this->sphere.vertices) {
-
-		}
-		this->sphere.generate();
-
 		this->set_active(false);
+		this->sphere_mesh.set_primitive_type(qgl::primitive_type::quads);
 
 		this->hide_cursor();
 	}
@@ -176,7 +245,6 @@ struct sphere_state : qsf::base_state {
 
 	void updating() override {
 		this->update_cursor();
-		this->update(this->camera);
 
 		if (this->event().key_single_pressed(sf::Keyboard::E)) {
 			++this->divisions;
@@ -220,30 +288,41 @@ struct sphere_state : qsf::base_state {
 			qpl::println(this->sphere.vertices.size());
 		}
 
-		for (auto& i : this->color_gens) {
-			i.update(this->event().frame_time_f());
+		if (this->event().key_holding(sf::Keyboard::C)) {
+			this->camera.set_speed(0.1);
 		}
+		else {
+			this->camera.set_speed(1.0);
+		}
+		this->update(this->camera);
 
-		this->fps.measure();
-		if (this->event().key_holding(sf::Keyboard::F)) {
-			qpl::println(this->fps.get_fps_u32(), " FPS");
-		}
-		for (qpl::size i = 0u; i < this->sphere.size(); i += 3u) {
-			auto color = qpl::frgb(this->color_gens[i / 3].get()).intensified(0.5);
-			this->sphere[i + 0].color = color;
-			this->sphere[i + 1].color = color;
-			this->sphere[i + 2].color = color;
-		}
-
-		this->sphere.update();
+		//for (auto& i : this->color_gens) {
+		//	i.update(this->event().frame_time_f());
+		//}
+		//
+		//this->fps.measure();
+		//if (this->event().key_holding(sf::Keyboard::F)) {
+		//	qpl::println(this->fps.get_fps_u32(), " FPS");
+		//}
+		//for (qpl::size i = 0u; i < this->sphere_mesh.size(); i += 6u) {
+		//	auto color = qpl::frgb(this->color_gens[i / 6].get()).intensified(0.5);
+		//
+		//	for (qpl::size j = 0u; j < 6u; ++j) {
+		//		this->sphere_mesh[i + j].color = color;
+		//	}
+		//}
 	}
 
 	void drawing() override {
-		this->draw(this->sphere, this->camera);
+		//this->draw(this->sphere, this->camera);
+		this->draw(this->sphere_mesh, this->camera);
 	}
 
-	qgl::vertex_array<qgl::flag_default, qgl::pos3, qgl::rgb> sphere;
-	std::vector<qpl::cubic_generator_vector3f> color_gens;
+	qgl::vertex_array<qgl::flag_default, qgl::pos3, qgl::frgb> sphere;
+	qgl::vertex_array<qgl::flag_default | qgl::flag_bit_primitive_type | qgl::flag_bit_autoupdate, qgl::pos3, qgl::frgb> sphere_mesh;
+
+
+	//std::vector<qpl::cubic_generator_vector3f> color_gens;
 	qpl::camera camera;
 	qpl::size divisions = 0u;
 	qpl::size sphere_count = 0u;
@@ -286,10 +365,6 @@ struct perlin_state : qsf::base_state {
 				this->va.add(add({ 0, 1 }));
 			}
 		}
-
-
-		this->va.generate();
-		this->va.primitive_type = qgl::primitive_type::quads;
 		this->set_active(false);
 	}
 
@@ -336,7 +411,7 @@ struct perlin_state : qsf::base_state {
 		this->draw(this->va, this->camera);
 	}
 
-	qgl::vertex_array<qgl::flag_primitive_type, qgl::pos3, qgl::rgb> va;
+	qgl::vertex_array<qgl::flag_bit_primitive_type, qgl::pos3, qgl::frgb> va;
 
 	qpl::fps_counter fps;
 	qpl::camera camera;
@@ -345,17 +420,6 @@ struct perlin_state : qsf::base_state {
 
 
 int main() try {
-
-	//qpl::rgb_type<qpl::u8, 3> r = decltype(r)::red();
-	//qpl::println(r);
-	//r.brighten(0.7);
-	//qpl::println(r);
-
-	//constexpr auto n = qpl::rgb_type<qpl::u8, 4>();
-	//qpl::println(n);
-	
-	constexpr auto m = qpl::rgb_type<qpl::u8, 2>(1, 5, 1);
-	//constexpr qpl::vector2i m;
 
 	qsf::framework framework;
 	framework.enable_gl();
