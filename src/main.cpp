@@ -1,5 +1,8 @@
 #include <qpl/qpl.hpp>
 
+#include <glm/gtc/quaternion.hpp>
+#include <glm/glm.hpp>
+#include <glm/gtx/rotate_vector.hpp>
 
 struct opengl_state : qsf::base_state {
 
@@ -12,17 +15,22 @@ struct opengl_state : qsf::base_state {
 		this->color_gens.resize(this->color_gens.size() + cube.indices.size());
 
 
-		auto x = index % 10u;
-		auto y = index / 10u;
+		//auto x = index % 10u;
+		//auto y = index / 10u;
+
+		auto x = qpl::random(-3, 3);
+		auto y = qpl::random(-3, 3);
+		auto z = qpl::random(-3, 3);
 
 		decltype(this->cubes) add = cube;
-		add.move(qpl::vec(x, y, 0) * 1.1);
+		add.move(qpl::vec(x, y, z) * 1.1);
 
 		for (auto& i : add.vertices) {
 			qpl::println(i);
 		}
 
 		this->cubes.add(add);
+		this->cubes.update();
 	}
 
 	void init() override {
@@ -30,13 +38,11 @@ struct opengl_state : qsf::base_state {
 
 		this->set_active(true);
 
-		auto cube_count = 1u;
+		auto cube_count = 10u;
 
 		for (qpl::u32 i = 0u; i < cube_count; ++i) {
 			this->add_cube();
 		}
-
-		this->cubes.generate();
 
 		//qpl::println(this->cubes.get_fragment_shader());
 		//qpl::println(this->cubes.get_vertex_shader());
@@ -289,10 +295,10 @@ struct sphere_state : qsf::base_state {
 		}
 
 		if (this->event().key_holding(sf::Keyboard::C)) {
-			this->camera.set_speed(0.1);
+			this->camera.set_speed(0.1f);
 		}
 		else {
-			this->camera.set_speed(1.0);
+			this->camera.set_speed(1.0f);
 		}
 		this->update(this->camera);
 
@@ -327,6 +333,175 @@ struct sphere_state : qsf::base_state {
 	qpl::size divisions = 0u;
 	qpl::size sphere_count = 0u;
 	bool lock_cursor = true;
+
+	qpl::fps_counter fps;
+};
+
+struct line_state : qsf::base_state {
+
+	void make_va(bool randomize) {
+		this->va.clear();
+		this->lines.clear();
+
+		if (randomize) {
+			this->a = qpl::random(qpl::vec(-1.0f, -1.0f, -1.0f), qpl::vec(1.0f, 1.0f, 1.0f));
+			this->b = qpl::random(qpl::vec(-1.0f, -1.0f, -1.0f), qpl::vec(1.0f, 1.0f, 1.0f));
+		}
+
+		auto diff = a - b;
+		auto length = diff.length();
+
+		auto normal = (a - b) / length;
+
+		
+
+		auto normalx = qpl::vec(normal.y, normal.x, normal.z);
+		auto normaly = qpl::vec(normal.x, -normal.y, normal.z);
+		auto normalz = qpl::vec(normal.x, normal.y, -normal.z);
+
+		auto thickness = 1.0 / 5;
+		auto offx = (-normalx) * thickness / 2;
+		auto offy = (-normaly) * thickness / 2;
+		auto offz = (-normalz) * thickness / 2;
+
+		auto perpx = qpl::vec3::cross(normal, qpl::vec(1, 0, 0));
+		//auto perpy = qpl::vec3::cross(normal, qpl::vec(0, 1, 0));
+
+		qpl::vec3 rotate = glm::rotate(glm::vec3(perpx), (qpl::f32)clock.elapsed_f_reset(), glm::vec3(normal));
+		//auto rotate = qpl::vec3(glm::rotate((qpl::f32)clock.elapsed_f(), glm::vec3(normal))) * perpx;
+
+		//auto rotate = glm::rotate(glm::vec3(), 1.0f, glm::vec3());
+
+		//auto perpz = qpl::vec3::cross(normal, qpl::vec(0, 0, 1));
+
+		//perpx = qpl::vec3::rotate(perpx, this->clock.elapsed_f(), qpl::vec3(1, 0, 0));
+		//perpy = qpl::vec3::rotate(perpy, this->clock.elapsed_f(), qpl::vec3(1, 0, 0));
+		//perpz = qpl::vec3::rotate(perpz, this->clock.elapsed_f(), qpl::vec3(1, 0, 0));
+
+		auto add = [&](qpl::vec3 v1, qpl::vec3 v2, qpl::vec3 normal, qpl::vec3 off, qpl::frgb color) {
+			this->va.add(qgl::make_vertex(v1 + normal * thickness + off, color));
+			this->va.add(qgl::make_vertex(v1 - normal * thickness + off, color));
+			this->va.add(qgl::make_vertex(v2 - normal * thickness + off, color));
+			this->va.add(qgl::make_vertex(v2 + normal * thickness + off, color));
+
+			this->va.add(qgl::make_vertex(v2 + normal * thickness + off, color));
+			this->va.add(qgl::make_vertex(v2 - normal * thickness + off, color));
+			this->va.add(qgl::make_vertex(v1 - normal * thickness + off, color));
+			this->va.add(qgl::make_vertex(v1 + normal * thickness + off, color));
+		};
+
+
+		//add(b, a, normalx, offx, qpl::frgb::red());
+		//add(a, b, normalx, -offx, qpl::frgb::red());
+		add(a, b, normal, 0, qpl::frgb::red());
+		//add(b, a, normalx, -offx, qpl::frgb::white());
+
+		this->lines.add(qgl::make_vertex(a, qpl::rgb::green()));
+		this->lines.add(qgl::make_vertex(b, qpl::rgb::green()));
+
+		this->lines.add(qgl::make_vertex(a, qpl::rgb::blue()));
+		this->lines.add(qgl::make_vertex(a + perpx, qpl::rgb::blue()));
+
+		this->lines.add(qgl::make_vertex(a, qpl::rgb::blue()));
+		this->lines.add(qgl::make_vertex(a - perpx, qpl::rgb::blue()));
+
+		this->lines.add(qgl::make_vertex(a, qpl::rgb::blue()));
+		this->lines.add(qgl::make_vertex(a + rotate, qpl::rgb::blue()));
+
+		//this->lines.add(qgl::make_vertex(a, qpl::rgb::red()));
+		//this->lines.add(qgl::make_vertex(a + perpy, qpl::rgb::red()));
+		//this->lines.add(qgl::make_vertex(a, qpl::rgb::yellow()));
+		//this->lines.add(qgl::make_vertex(a + perpy * 2, qpl::rgb::yellow()));
+		//
+		//this->lines.add(qgl::make_vertex(a, qpl::rgb::magenta()));
+		//this->lines.add(qgl::make_vertex(a + perpy * 2, qpl::rgb::magenta()));
+
+		this->va.update();
+		this->lines.update();
+
+	}
+
+	void init() override {
+		this->clear_color = qpl::rgb(30, 30, 40);
+
+		this->set_active(true);
+
+		auto count = 1u;
+
+		this->make_va(true);
+
+		this->set_active(false);
+		this->va.set_primitive_type(qgl::primitive_type::quads);
+		this->lines.set_primitive_type(qgl::primitive_type::lines);
+
+		this->hide_cursor();
+	}
+
+	void cursor_on() {
+		this->show_cursor();
+		this->camera.allow_looking = false;
+		this->lock_cursor = false;
+	}
+	void cursor_off() {
+		this->hide_cursor();
+		this->camera.allow_looking = true;
+		this->lock_cursor = true;
+
+		this->set_cursor_position(this->center());
+	}
+
+	void update_cursor() {
+		if (this->has_gained_focus()) {
+			this->cursor_off();
+		}
+		if (this->has_lost_focus()) {
+			this->cursor_on();
+		}
+
+		if (this->lock_cursor) {
+			if (this->frame_ctr == 0u) {
+				this->cursor_off();
+			}
+			this->set_cursor_position(this->center());
+		}
+	}
+
+	void updating() override {
+		this->update_cursor();
+
+		if (this->event().key_holding(sf::Keyboard::C)) {
+			this->camera.set_speed(0.1f);
+		}
+		else {
+			this->camera.set_speed(1.0f);
+		}
+
+		this->update(this->camera);
+
+		if (this->event().key_single_pressed(sf::Keyboard::T)) {
+			this->make_va(true);
+		}
+		else {
+			this->make_va(false);
+		}
+	}
+
+	void drawing() override {
+		this->draw(this->va, this->camera);
+		this->draw(this->lines, this->camera);
+	}
+
+	qgl::vertex_array<qgl::flag_default | qgl::flag_bit_primitive_type, qgl::pos3, qgl::frgb> va;
+	qgl::vertex_array<qgl::flag_default | qgl::flag_bit_primitive_type, qgl::pos3, qgl::frgb> lines;
+
+
+	//std::vector<qpl::cubic_generator_vector3f> color_gens;
+	qpl::camera camera;
+	bool lock_cursor = true;
+
+	qpl::vec3 a;
+	qpl::vec3 b;
+	qpl::clock clock;
 
 	qpl::fps_counter fps;
 };
@@ -420,13 +595,12 @@ struct perlin_state : qsf::base_state {
 
 
 int main() try {
-
 	qsf::framework framework;
 	framework.enable_gl();
 	framework.set_title("QPL");
 	framework.set_dimension({ 1400u, 950u });
 
-	framework.add_state<sphere_state>();
+	framework.add_state<line_state>();
 	//framework.add_state<opengl_state>();
 	framework.game_loop();
 }
