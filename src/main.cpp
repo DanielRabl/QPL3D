@@ -118,26 +118,34 @@ struct sphere_state : qsf::base_state {
 
 		auto index = this->sphere.size() / ico_sphere.indices.size();
 
-		//this->color_gens.resize(this->color_gens.size() + (ico_sphere.indices.size()) / 3);
 		auto x = index % 10u;
 		auto y = index / 10u;
 
 		decltype(this->sphere) add = ico_sphere;
 
-		add.move(qpl::vec(x, y, 0) * 2.2);
+		auto offset = qpl::vec(x, y, 0) * 2.2;
+		add.move(offset);
 
 		this->sphere.add(add);
 		for (auto& i : this->sphere) {
-			i.color = qpl::rgb::black();
+			auto norm = i.position - offset;
+			auto c = qpl::clamp_0_1(norm.sum() / 3);
+
+			i.color = qpl::frgb(c, c, c);
+
 		}
 
 
 		std::set<std::pair<qpl::vec3, qpl::vec3>> seen;
 
+
 		this->sphere_mesh.vertices.clear();
 		for (qpl::size i = 0u; i < this->sphere.vertices.size() - 1; ++i) {
 
 
+			if (i % 3 == 2) {
+				continue;
+			}
 
 			auto a = this->sphere[i].position;
 			auto b = this->sphere[i + 1].position;
@@ -150,37 +158,45 @@ struct sphere_state : qsf::base_state {
 			}
 			seen.insert(std::make_pair(a, b));
 
-			auto diff = a - b;
-			auto length = diff.length();
+			auto normal = (a - b).normalized();
 
-			auto normal = (a - b) / length;
+			auto thickness = 1.0f / (15 * std::log(this->sphere.vertices.size()));
 
-			auto thickness = 1.0f / (10 * std::log(this->sphere.vertices.size()) * 3);
+			auto add = [&](qpl::vec3 v1, qpl::vec3 v2, qpl::vec3 mesh_normal, qpl::vec3 off) {
 
-			auto perpx = qpl::vec3::cross(normal, qpl::vec(1, 0, 0));
+				auto mesh_perp = qpl::rotate(mesh_normal, qpl::pi_32 / 2, normal);
+				auto c = qpl::clamp_0_1(mesh_perp.sum() / 2);
+				auto color = qpl::frgb(c, c, c);
 
-			auto angle1 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()), normal);
-			auto angle2 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()) + qpl::pi_32 * 0.5f, normal);
-			auto angle3 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()) + qpl::pi_32 * 1.0f, normal);
-			auto angle4 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()) + qpl::pi_32 * 1.5f, normal);
+				this->lines.add(qgl::make_vertex((v1 + v2) / 2 - mesh_perp / 5 + off, qpl::frgb::blue()));
+				this->lines.add(qgl::make_vertex((v1 + v2) / 2 + mesh_perp / 5 + off, qpl::frgb::blue()));
 
-			auto add = [&](qpl::vec3 v1, qpl::vec3 v2, qpl::vec3 normal, qpl::vec3 off, qpl::frgb color) {
-				this->sphere_mesh.add(qgl::make_vertex(v1 + normal * thickness + off, color));
-				this->sphere_mesh.add(qgl::make_vertex(v1 - normal * thickness + off, color));
-				this->sphere_mesh.add(qgl::make_vertex(v2 - normal * thickness + off, color));
-				this->sphere_mesh.add(qgl::make_vertex(v2 + normal * thickness + off, color));
-
-				this->sphere_mesh.add(qgl::make_vertex(v2 + normal * thickness + off, color));
-				this->sphere_mesh.add(qgl::make_vertex(v2 - normal * thickness + off, color));
-				this->sphere_mesh.add(qgl::make_vertex(v1 - normal * thickness + off, color));
-				this->sphere_mesh.add(qgl::make_vertex(v1 + normal * thickness + off, color));
+				this->sphere_mesh.add(qgl::make_vertex(v1 + mesh_normal * thickness + off, color));
+				this->sphere_mesh.add(qgl::make_vertex(v1 - mesh_normal * thickness + off, color));
+				this->sphere_mesh.add(qgl::make_vertex(v2 - mesh_normal * thickness + off, color));
+				this->sphere_mesh.add(qgl::make_vertex(v2 + mesh_normal * thickness + off, color));
 			};
 
-			add(a, b, angle1.normalized(), angle2 * thickness, qpl::rgb::grey_shade(250));
-			add(a, b, angle2.normalized(), angle3 * thickness, qpl::rgb::grey_shade(200));
-			add(a, b, angle3.normalized(), angle4 * thickness, qpl::rgb::grey_shade(150));
-			add(a, b, angle4.normalized(), angle1 * thickness, qpl::rgb::grey_shade(100));
+			qpl::size seperations = 4u;
 
+			for (qpl::size sep = 0u; sep < seperations; ++sep) {
+				auto progress1 = (sep / qpl::f32_cast(seperations));
+				auto progress2 = ((sep + 1) / qpl::f32_cast(seperations));
+			
+				auto delta_angle1 = (qpl::pi_32 * 2) * progress1;
+				auto delta_angle2 = (qpl::pi_32 * 2) * progress2;
+
+				auto angle_start = qpl::pi_32 / 2 + this->elapsed_sum;
+
+				auto perpy = ((a + b) / 2).normalized();
+				auto mesh_normal = qpl::rotate(perpy, angle_start + delta_angle1, normal);
+				auto corner = qpl::rotate(perpy, angle_start + delta_angle2, normal);
+			
+				add(a, b, mesh_normal, corner * thickness);
+			}
+
+			auto perpy = ((a + b) / 2).normalized();
+			auto perpx = qpl::rotate(perpy, qpl::pi_32 / 2, normal);
 		}
 
 	}
@@ -190,17 +206,27 @@ struct sphere_state : qsf::base_state {
 
 		this->set_active(true);
 
-		auto count = 1u;
-
-		for (qpl::u32 i = 0u; i < count; ++i) {
-			++this->sphere_count;
-			this->add_sphere(this->divisions);
-		}
+		++this->sphere_count;
+		this->make_spheres();
 
 		this->set_active(false);
 		this->sphere_mesh.set_primitive_type(qgl::primitive_type::quads);
+		this->lines.set_primitive_type(qgl::primitive_type::lines);
 
 		this->hide_cursor();
+	}
+
+	void make_spheres() {
+		this->sphere.clear();
+		this->lines.clear();
+		this->sphere_mesh.clear();
+		this->elapsed_sum += this->clock.elapsed_f_reset();
+		for (qpl::size i = 0u; i < this->sphere_count; ++i) {
+			this->add_sphere(this->divisions);
+		}
+		this->sphere_mesh.update();
+		this->sphere.update();
+		this->lines.update();
 	}
 
 	void cursor_on() {
@@ -237,24 +263,14 @@ struct sphere_state : qsf::base_state {
 
 		if (this->event().key_single_pressed(sf::Keyboard::E)) {
 			++this->divisions;
-			this->sphere.clear();
-			for (qpl::size i = 0u; i < this->sphere_count; ++i) {
-				this->add_sphere(this->divisions);
-			}
-			this->sphere_mesh.update();
-			this->sphere.update();
+			this->make_spheres();
 
 			qpl::println(this->sphere.vertices.size());
 		}
 		if (this->event().key_single_pressed(sf::Keyboard::Q)) {
 			if (this->divisions) {
 				--this->divisions;
-				this->sphere.clear();
-				for (qpl::size i = 0u; i < this->sphere_count; ++i) {
-					this->add_sphere(this->divisions);
-				}
-				this->sphere_mesh.update();
-				this->sphere.update();
+				this->make_spheres();
 
 				qpl::println(this->sphere.vertices.size());
 			}
@@ -265,18 +281,14 @@ struct sphere_state : qsf::base_state {
 			this->add_sphere(this->divisions);
 			this->sphere_mesh.update();
 			this->sphere.update();
+			this->lines.update();
 
 			qpl::println(this->sphere.vertices.size());
 		}
 		if (this->event().key_single_pressed(sf::Keyboard::T)) {
 
 			--this->sphere_count;
-			this->sphere.clear();
-			for (qpl::size i = 0u; i < this->sphere_count; ++i) {
-				this->add_sphere(this->divisions);
-			}
-			this->sphere_mesh.update();
-			this->sphere.update();
+			this->make_spheres();
 
 			qpl::println(this->sphere.vertices.size());
 		}
@@ -287,48 +299,50 @@ struct sphere_state : qsf::base_state {
 		else {
 			this->camera.set_speed(1.0f);
 		}
-		if (this->event().key_holding(sf::Keyboard::G)) {
-			this->sphere.clear();
-			for (qpl::size i = 0u; i < this->sphere_count; ++i) {
-				this->add_sphere(this->divisions);
-			}
-			this->sphere_mesh.update();
-			this->sphere.update();
-		}
-		this->update(this->camera);
 
-		//for (auto& i : this->color_gens) {
-		//	i.update(this->event().frame_time_f());
-		//}
-		//
-		//this->fps.measure();
-		//if (this->event().key_holding(sf::Keyboard::F)) {
-		//	qpl::println(this->fps.get_fps_u32(), " FPS");
-		//}
-		//for (qpl::size i = 0u; i < this->sphere_mesh.size(); i += 6u) {
-		//	auto color = qpl::frgb(this->color_gens[i / 6].get()).intensified(0.5);
-		//
-		//	for (qpl::size j = 0u; j < 6u; ++j) {
-		//		this->sphere_mesh[i + j].color = color;
-		//	}
-		//}
+		if (this->event().key_holding(sf::Keyboard::G)) {
+			this->make_spheres();
+		}
+
+		if (this->event().key_single_pressed(sf::Keyboard::Y)) {
+			this->sphere_visible = !this->sphere_visible;
+		}
+		if (this->event().key_single_pressed(sf::Keyboard::X)) {
+			this->mesh_visible = !this->mesh_visible;
+		}
+		if (this->event().key_single_pressed(sf::Keyboard::C)) {
+			this->normals_visible = !this->normals_visible;
+		}
+
+		this->update(this->camera);
 	}
 
 	void drawing() override {
-		//this->draw(this->sphere, this->camera);
-		this->draw(this->sphere_mesh, this->camera);
+		if (this->sphere_visible) {
+			this->draw(this->sphere, this->camera);
+		}
+		if (this->mesh_visible) {
+			this->draw(this->sphere_mesh, this->camera);
+		}
+		if (this->normals_visible) {
+			this->draw(this->lines, this->camera);
+		}
 	}
 
 	qgl::vertex_array<qgl::flag_default, qgl::pos3, qgl::frgb> sphere;
 	qgl::vertex_array<qgl::flag_default | qgl::flag_bit_primitive_type, qgl::pos3, qgl::frgb> sphere_mesh;
+	qgl::vertex_array<qgl::flag_default | qgl::flag_bit_primitive_type, qgl::pos3, qgl::frgb> lines;
 
 
-	//std::vector<qpl::cubic_generator_vector3f> color_gens;
 	qpl::camera camera;
 	qpl::size divisions = 0u;
 	qpl::size sphere_count = 0u;
 	bool lock_cursor = true;
+	bool sphere_visible = true;
+	bool mesh_visible = true;
+	bool normals_visible = false;
 	qpl::clock clock;
+	qpl::f64 elapsed_sum = 0.0;
 
 	qpl::fps_counter fps;
 };
@@ -344,20 +358,13 @@ struct line_state : qsf::base_state {
 			this->b = qpl::random(qpl::vec(-1.0f, -1.0f, -1.0f), qpl::vec(1.0f, 1.0f, 1.0f));
 		}
 
-		auto diff = a - b;
-		auto length = diff.length();
+		auto normal = (a - b).normalized();
 
-		auto normal = (a - b) / length;
-		auto normaly = qpl::vec(a.x - b.x, b.y - a.y, a.z - b.z) / length;
 
 		auto thickness = 1.0 / 5;
+		auto perpx = qpl::rotate_x(normal, qpl::pi_32 / 2);
 
-		auto perpx = qpl::vec3::cross(normal, qpl::vec(1, 0, 0));
-
-		auto angle1 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()), normal);
-		auto angle2 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()) + qpl::pi_32 * 0.5f, normal);
-		auto angle3 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()) + qpl::pi_32 * 1.0f, normal);
-		auto angle4 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()) + qpl::pi_32 * 1.5f, normal);
+		auto width = (normal * thickness).length();
 
 		auto add = [&](qpl::vec3 v1, qpl::vec3 v2, qpl::vec3 normal, qpl::vec3 off, qpl::frgb color) {
 			this->va.add(qgl::make_vertex(v1 + normal * thickness + off, color));
@@ -379,6 +386,12 @@ struct line_state : qsf::base_state {
 		
 		this->lines.add(qgl::make_vertex(a, qpl::rgb::blue()));
 		this->lines.add(qgl::make_vertex(a - perpx, qpl::rgb::blue()));
+
+
+		auto angle1 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()), normal);
+		auto angle2 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()) + qpl::pi_32 * 0.5f, normal);
+		auto angle3 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()) + qpl::pi_32 * 1.0f, normal);
+		auto angle4 = qpl::rotate(perpx, qpl::f32_cast(clock.elapsed_f()) + qpl::pi_32 * 1.5f, normal);
 
 		this->lines.add(qgl::make_vertex(a, qpl::rgb::white()));
 		this->lines.add(qgl::make_vertex(a + angle1, qpl::rgb::white()));
@@ -473,6 +486,9 @@ struct line_state : qsf::base_state {
 		}
 		else {
 			this->make_va(false);
+		}
+		if (this->event().key_single_pressed(sf::Keyboard::Escape)) {
+			this->pop_this_state();
 		}
 	}
 
@@ -591,7 +607,7 @@ int main() try {
 	framework.set_dimension({ 1400u, 950u });
 
 	framework.add_state<sphere_state>();
-	//framework.add_state<line_state>();
+	framework.add_state<line_state>();
 	//framework.add_state<opengl_state>();
 	framework.game_loop();
 }
