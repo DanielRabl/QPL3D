@@ -1,9 +1,5 @@
 #include <qpl/qpl.hpp>
 
-#include <glm/gtc/quaternion.hpp>
-#include <glm/glm.hpp>
-#include <glm/gtx/rotate_vector.hpp>
-
 struct opengl_state : qsf::base_state {
 
 	void add_cube() {
