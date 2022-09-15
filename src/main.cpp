@@ -40,46 +40,10 @@ struct opengl_state : qsf::base_state {
 			this->add_cube();
 		}
 
-		//qpl::println(this->cubes.get_fragment_shader());
-		//qpl::println(this->cubes.get_vertex_shader());
-
-
 		this->set_active(false);
-
-		this->hide_cursor();
 	}
-
-	void cursor_on() {
-		this->show_cursor();
-		this->camera.allow_looking = false;
-		this->lock_cursor = false;
-	}
-	void cursor_off() {
-		this->hide_cursor();
-		this->camera.allow_looking = true;
-		this->lock_cursor = true;
-
-		this->set_cursor_position(this->center());
-	}
-
-	void update_cursor() {
-		if (this->has_gained_focus()) {
-			this->cursor_off();
-		}
-		if (this->has_lost_focus()) {
-			this->cursor_on();
-		}
-
-		if (this->lock_cursor) {
-			if (this->frame_ctr == 0u) {
-				this->cursor_off();
-			}
-			this->set_cursor_position(this->center());
-		}
-	}
-
 	void updating() override {
-		this->update_cursor();
+		this->lock.update(this->camera, *this);
 		this->update(this->camera);
 
 		if (this->event().key_holding(sf::Keyboard::E)) {
@@ -103,7 +67,7 @@ struct opengl_state : qsf::base_state {
 	qgl::vertex_array<qgl::flag_default, qgl::pos3, qgl::frgb> cubes;
 	std::vector<qpl::cubic_generator_vector3f> color_gens;
 	qpl::camera camera;
-	bool lock_cursor = true;
+	qsf::camera_cursor_lock lock;
 };
 
 struct sphere_state : qsf::base_state {
@@ -178,7 +142,7 @@ struct sphere_state : qsf::base_state {
 			for (qpl::size sep = 0u; sep < seperations; ++sep) {
 				auto progress1 = (sep / qpl::f32_cast(seperations));
 				auto progress2 = ((sep + 1) / qpl::f32_cast(seperations));
-			
+
 				auto delta_angle1 = (qpl::pi_32 * 2) * progress1;
 				auto delta_angle2 = (qpl::pi_32 * 2) * progress2;
 
@@ -187,7 +151,7 @@ struct sphere_state : qsf::base_state {
 				auto perpy = ((a + b) / 2).normalized();
 				auto mesh_normal = qpl::rotate(perpy, angle_start + delta_angle1, normal);
 				auto corner = qpl::rotate(perpy, angle_start + delta_angle2, normal);
-			
+
 				add(a, b, mesh_normal, corner * thickness);
 			}
 
@@ -225,37 +189,8 @@ struct sphere_state : qsf::base_state {
 		this->lines.update();
 	}
 
-	void cursor_on() {
-		this->show_cursor();
-		this->camera.allow_looking = false;
-		this->lock_cursor = false;
-	}
-	void cursor_off() {
-		this->hide_cursor();
-		this->camera.allow_looking = true;
-		this->lock_cursor = true;
-
-		this->set_cursor_position(this->center());
-	}
-
-	void update_cursor() {
-		if (this->has_gained_focus()) {
-			this->cursor_off();
-		}
-		if (this->has_lost_focus()) {
-			this->cursor_on();
-		}
-
-		if (this->lock_cursor) {
-			if (this->frame_ctr == 0u) {
-				this->cursor_off();
-			}
-			this->set_cursor_position(this->center());
-		}
-	}
-
 	void updating() override {
-		this->update_cursor();
+		this->lock.update(this->camera, *this);
 
 		if (this->event().key_single_pressed(sf::Keyboard::E)) {
 			++this->divisions;
@@ -330,10 +265,10 @@ struct sphere_state : qsf::base_state {
 	qgl::vertex_array<qgl::flag_default | qgl::flag_bit_primitive_type, qgl::pos3, qgl::frgb> lines;
 
 
+	qsf::camera_cursor_lock lock;
 	qpl::camera camera;
 	qpl::size divisions = 0u;
 	qpl::size sphere_count = 0u;
-	bool lock_cursor = true;
 	bool sphere_visible = true;
 	bool mesh_visible = true;
 	bool normals_visible = false;
@@ -376,10 +311,10 @@ struct line_state : qsf::base_state {
 
 		this->lines.add(qgl::make_vertex(a, qpl::rgb::green()));
 		this->lines.add(qgl::make_vertex(b, qpl::rgb::green()));
-		
+
 		this->lines.add(qgl::make_vertex(a, qpl::rgb::blue()));
 		this->lines.add(qgl::make_vertex(a + perpx, qpl::rgb::blue()));
-		
+
 		this->lines.add(qgl::make_vertex(a, qpl::rgb::blue()));
 		this->lines.add(qgl::make_vertex(a - perpx, qpl::rgb::blue()));
 
@@ -432,41 +367,10 @@ struct line_state : qsf::base_state {
 		this->set_active(false);
 		this->va.set_primitive_type(qgl::primitive_type::quads);
 		this->lines.set_primitive_type(qgl::primitive_type::lines);
-
-		this->hide_cursor();
-	}
-
-	void cursor_on() {
-		this->show_cursor();
-		this->camera.allow_looking = false;
-		this->lock_cursor = false;
-	}
-	void cursor_off() {
-		this->hide_cursor();
-		this->camera.allow_looking = true;
-		this->lock_cursor = true;
-
-		this->set_cursor_position(this->center());
-	}
-
-	void update_cursor() {
-		if (this->has_gained_focus()) {
-			this->cursor_off();
-		}
-		if (this->has_lost_focus()) {
-			this->cursor_on();
-		}
-
-		if (this->lock_cursor) {
-			if (this->frame_ctr == 0u) {
-				this->cursor_off();
-			}
-			this->set_cursor_position(this->center());
-		}
 	}
 
 	void updating() override {
-		this->update_cursor();
+		this->lock.update(this->camera, *this);
 
 		if (this->event().key_holding(sf::Keyboard::C)) {
 			this->camera.set_speed(0.1f);
@@ -496,14 +400,12 @@ struct line_state : qsf::base_state {
 	qgl::vertex_array<qgl::flag_default | qgl::flag_bit_primitive_type, qgl::pos3, qgl::frgb> va;
 	qgl::vertex_array<qgl::flag_default | qgl::flag_bit_primitive_type, qgl::pos3, qgl::frgb> lines;
 
-
-	//std::vector<qpl::cubic_generator_vector3f> color_gens;
 	qpl::camera camera;
-	bool lock_cursor = true;
 
 	qpl::vec3 a;
 	qpl::vec3 b;
 	qpl::clock clock;
+	qsf::camera_cursor_lock lock;
 
 	qpl::fps_counter fps;
 };
@@ -545,37 +447,8 @@ struct perlin_state : qsf::base_state {
 		this->set_active(false);
 	}
 
-	void cursor_on() {
-		this->show_cursor();
-		this->camera.allow_looking = false;
-		this->lock_cursor = false;
-	}
-	void cursor_off() {
-		this->hide_cursor();
-		this->camera.allow_looking = true;
-		this->lock_cursor = true;
-
-		this->set_cursor_position(this->center());
-	}
-
-	void update_cursor() {
-		if (this->has_gained_focus()) {
-			this->cursor_off();
-		}
-		if (this->has_lost_focus()) {
-			this->cursor_on();
-		}
-
-		if (this->lock_cursor) {
-			if (this->frame_ctr == 0u) {
-				this->cursor_off();
-			}
-			this->set_cursor_position(this->center());
-		}
-	}
-
 	void updating() override {
-		this->update_cursor();
+		this->lock.update(this->camera, *this);
 		this->update(this->camera);
 
 		this->fps.measure();
@@ -592,9 +465,38 @@ struct perlin_state : qsf::base_state {
 
 	qpl::fps_counter fps;
 	qpl::camera camera;
-	bool lock_cursor = true;
+	qsf::camera_cursor_lock lock;
 };
 
+struct cuboid_state : qsf::base_state {
+
+	void make_va() {
+		this->va = qgl::get_cube();
+
+		for (auto& i : va) {
+			i.color = qpl::get_random_color();
+		}
+	}
+
+
+	void init() override {
+		this->clear_color = qpl::rgb(30, 30, 40);
+
+		this->make_va();
+	}
+	void updating() override {
+
+		this->lock.update(this->camera, *this);
+		this->update(this->camera);
+	}
+	void drawing() override {
+		this->draw(this->va, this->camera);
+	}
+
+	qgl::vertex_array<qgl::flag_default, qgl::primitive_quads<qgl::pos3, qgl::frgb>> va;
+	qpl::camera camera;
+	qsf::camera_cursor_lock lock;
+};
 
 int main() try {
 	qsf::framework framework;
@@ -602,6 +504,7 @@ int main() try {
 	framework.set_title("QPL");
 	framework.set_dimension({ 1400u, 950u });
 
+	//ramework.add_state<cuboid_state>();
 	framework.add_state<sphere_state>();
 	framework.add_state<line_state>();
 	//framework.add_state<opengl_state>();
@@ -611,3 +514,4 @@ catch (std::exception& any) {
 	qpl::println("caught exception:\n", any.what());
 	qpl::system_pause();
 }
+
