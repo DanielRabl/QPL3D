@@ -430,8 +430,8 @@ struct perlin_state : qsf::base_state {
 				auto pos = qpl::vec(x, 0, z);
 				auto add = [&](qpl::vec2 quad) {
 
-					auto y = y_noise.get(x + quad.x, z + quad.y, 0.01, 15) * d * 5;
-					auto c = std::fmod((c_noise.get(x + quad.x, z + quad.y, 0.1, 2) - 0.5) * 3, 1.0);
+					auto y = y_noise.get(qpl::vec(x + quad.x, z + quad.y), 0.01, 15) * d * 5;
+					auto c = std::fmod((c_noise.get(qpl::vec(x + quad.x, z + quad.y), 0.1, 2) - 0.5) * 3, 1.0);
 
 					qpl::vec3 position = pos + qpl::vec(quad.x, y, quad.y);
 					qpl::rgb color = qpl::get_rainbow_color(c);
